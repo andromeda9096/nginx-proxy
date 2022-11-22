@@ -1,0 +1,70 @@
+---
+version: "3"
+networks:
+  proxy-network: # Network for app connect to proxy
+    driver: bridge
+  internal-network: #internal db proxy
+    driver: bridge
+
+services:
+  app:
+    container_name: nginx_proxy
+    image: 'jc21/nginx-proxy-manager:latest'
+    restart: unless-stopped
+    ports:
+      # These ports are in format <host-port>:<container-port>
+      - '80:80' # Public HTTP Port
+      - '443:443' # Public HTTPS Port
+      - '81:81' # Admin Web Port
+      # Add any other Stream port you want to expose
+      #- '21:21' # FTP
+    environment:
+      DB_MYSQL_HOST: "db"
+      DB_MYSQL_PORT: 3306
+      DB_MYSQL_USER: "npm"
+      DB_MYSQL_PASSWORD: "yourP@ssw0rd"
+      DB_MYSQL_NAME: "npm"
+      # Uncomment this if IPv6 is not enabled on your host
+      # DISABLE_IPV6: 'true'
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt
+    depends_on:
+      - db
+    networks:
+      - proxy-network
+      - internal-network #internal db proxy
+
+  db:
+    container_name: nginx_proxy_db
+    image: 'jc21/mariadb-aria:latest'
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: 'yourP@ssw0rd'
+      MYSQL_DATABASE: 'npm'
+      MYSQL_USER: 'npm'
+      MYSQL_PASSWORD: 'yourP@ssw0rd'
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    networks:
+      - internal-network   #internal db proxy
+
+  goaccess:
+    image: xavierh/goaccess-for-nginxproxymanager:latest
+    container_name: goaccess
+    restart: always
+    ports:
+        - '7880:7880'
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=Asia/Ho_Chi_Minh
+        # - SKIP_ARCHIVED_LOGS=False #optional
+      - DEBUG=False #optional
+      - BASIC_AUTH=True #optional
+      - BASIC_AUTH_USERNAME=admin #optional
+      - BASIC_AUTH_PASSWORD=yourP@ssw0rd #optional
+      - EXCLUDE_IPS=127.0.0.1,10.121.0.0-10.121.2.254,10.208.0.0/24 #optional - comma delimited
+        # - LOG_TYPE=NPM #optional - more information below
+    volumes:
+      - /server/projects/npm/data/logs:/opt/log
